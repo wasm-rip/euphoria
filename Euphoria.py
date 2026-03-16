@@ -9,9 +9,6 @@ from tkinter import filedialog, colorchooser
 import threading, os, sys, time, json, re, hashlib, struct, uuid
 from pathlib import Path
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SETTINGS  ·  persistence
-# ══════════════════════════════════════════════════════════════════════════════
 SETTINGS_PATH = Path.home() / ".unity_tools_v2.json"
 DEFAULT_SETTINGS = {
     "theme": "Dark Blue", "accent_color": "", "font_size": 9,
@@ -35,9 +32,6 @@ def save_settings(s):
 
 SETTINGS = load_settings()
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  THEME ENGINE
-# ══════════════════════════════════════════════════════════════════════════════
 THEME_DEFS = {
     "Dark Blue": {
         "BG":"#05070d","SIDEBAR":"#070a11","CONTENT":"#080b13","CARD":"#0c1018",
@@ -140,9 +134,6 @@ def dp(v):
     m={"Compact":0.6,"Normal":1.0,"Comfortable":1.45}
     return max(1, int(v * m.get(SETTINGS.get("ui_density","Normal"),1.0)))
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  EMBEDDED FULL TMP SHADER
-# ══════════════════════════════════════════════════════════════════════════════
 SHADER_NAME = "tmpfixwasm_com.shader"
 SHADER_CONTENT = r'''Shader "WASM/Wasmcomfix"
 {
@@ -222,10 +213,6 @@ SHADER_CONTENT = r'''Shader "WASM/Wasmcomfix"
         Pass
         {
             CGPROGRAM
-            #pragma target 3.0
-            #pragma vertex vert
-            #pragma fragment frag
-            #include "UnityCG.cginc"
             sampler2D _MainTex; float4 _MainTex_ST;
             float _GradientScale,_Sharpness,_ScaleRatioA,_ScaleRatioB,_ScaleRatioC;
             float4 _FaceColor; float _FaceDilate; sampler2D _FaceTex;
@@ -287,9 +274,6 @@ SHADER_CONTENT = r'''Shader "WASM/Wasmcomfix"
         {
             ColorMask 0  ZWrite Off
             CGPROGRAM
-            #pragma vertex vert_m
-            #pragma fragment frag_m
-            #include "UnityCG.cginc"
             float4 vert_m(float4 v:POSITION):SV_POSITION{return UnityObjectToClipPos(v);}
             fixed4 frag_m():SV_Target{return fixed4(0,0,0,0);}
             ENDCG
@@ -298,10 +282,6 @@ SHADER_CONTENT = r'''Shader "WASM/Wasmcomfix"
     FallBack "Hidden/InternalErrorShader"
 }
 '''
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  FIX WORKER FUNCTIONS
-# ══════════════════════════════════════════════════════════════════════════════
 
 def find_unity_projects():
     candidates=[]; home=Path.home()
@@ -338,7 +318,6 @@ def inject_shader(project_path: Path):
         return True, f"Injected to {dest}"
     except Exception as e: return False, str(e)
 
-# ── WASM/Wasmcomfix material defaults (matches every property in the shader) ──
 _WASM_FLOAT_DEFAULTS = {
     "_TextureWidth":512,"_TextureHeight":512,"_GradientScale":5.0,
     "_ScaleX":1.0,"_ScaleY":1.0,"_PerspectiveFilter":0.875,"_Sharpness":0,
@@ -363,11 +342,6 @@ _WASM_COLOR_DEFAULTS = {
 _WASM_TEX_DEFAULTS = ["_MainTex","_FaceTex","_OutlineTex"]
 
 def apply_wasm_shader_to_tmp_materials(project_path: Path, log_cb=None):
-    """
-    Find every .mat file in Assets that looks like a TMP material and:
-      1. Repoint its m_Shader to the injected WASM/Wasmcomfix shader GUID.
-      2. Inject any missing float/color/texture properties from the shader defaults.
-    """
     shader_meta = project_path/"Assets"/"Shaders"/"WASM"/(SHADER_NAME+".meta")
     shader_guid = None
     if shader_meta.exists():
@@ -389,14 +363,12 @@ def apply_wasm_shader_to_tmp_materials(project_path: Path, log_cb=None):
 
             changed=False; txt=src
 
-            # 1. Repoint shader reference
             txt2=re.sub(
                 r'm_Shader:\s*\{[^}]*\}',
                 f'm_Shader: {{fileID: 4800000, guid: {shader_guid}, type: 3}}',
                 txt)
             if txt2!=txt: txt=txt2; changed=True
 
-            # 2. Inject missing float properties
             for prop,val in _WASM_FLOAT_DEFAULTS.items():
                 if prop not in txt:
                     v=int(val) if float(val)==int(val) else val
@@ -404,7 +376,6 @@ def apply_wasm_shader_to_tmp_materials(project_path: Path, log_cb=None):
                                f'\\1    - {prop}: [{v}]\n', txt, count=1)
                     changed=True
 
-            # 3. Inject missing color/vector properties
             for prop,(r,g,b,a) in _WASM_COLOR_DEFAULTS.items():
                 if prop not in txt:
                     txt=re.sub(r'(    m_Colors:\n)',
@@ -412,7 +383,6 @@ def apply_wasm_shader_to_tmp_materials(project_path: Path, log_cb=None):
                                txt, count=1)
                     changed=True
 
-            # 4. Inject missing texture slots
             for tex in _WASM_TEX_DEFAULTS:
                 if tex not in txt:
                     txt=re.sub(r'(    m_TexEnvs:\n)',
@@ -436,7 +406,6 @@ def apply_wasm_shader_to_tmp_materials(project_path: Path, log_cb=None):
         if errors: log_cb(f"  {len(errors)} error(s) encountered")
     return patched, errors
 
-# ── Fix 2: Script GUID stability ──────────────────────────────────────────────
 def fix_script_guids(project_path: Path, log_cb=None):
     fixed=0; skipped=0; errors=[]
     assets=project_path/"Assets"
@@ -472,9 +441,122 @@ def fix_script_guids(project_path: Path, log_cb=None):
             if log_cb: log_cb(f"  ERROR {cs.name}: {e}")
     return fixed, skipped, errors
 
-# ── Fix 0: TMP Component Scanner ─────────────────────────────────────────────
-# Each entry: (component_type, [field_signatures_that_identify_it])
-# We parse raw YAML MonoBehaviour blocks and match by the fields present.
+_BUILTIN_SHADER_REMAP = {
+    "standard":              (46,     "0000000000000000f000000000000000", 0),
+    "unlit/color":           (10753,  "0000000000000000f000000000000000", 0),
+    "unlit/texture":         (10752,  "0000000000000000f000000000000000", 0),
+    "unlit/transparent":     (10754,  "0000000000000000f000000000000000", 0),
+    "unlit/transparent cutout": (10755, "0000000000000000f000000000000000", 0),
+    "sprites/default":       (10754,  "0000000000000000f000000000000000", 0),
+    "mobile/diffuse":        (10120,  "0000000000000000f000000000000000", 0),
+    "legacy shaders/diffuse":(10120,  "0000000000000000f000000000000000", 0),
+}
+
+def fix_broken_shaders(project_path: Path, log_cb=None):
+    assets = project_path / "Assets"
+
+    project_shaders: dict[str, Path] = {}
+    name_to_guid: dict[str, str] = {}
+    for shader_file in assets.rglob("*.shader"):
+        meta = shader_file.with_suffix(shader_file.suffix + ".meta")
+        if meta.exists():
+            m = re.search(r'guid:\s*([0-9a-f]{32})', meta.read_text(encoding="utf-8", errors="replace"))
+            if m:
+                g = m.group(1)
+                project_shaders[g] = shader_file
+                try:
+                    first_line = shader_file.read_text(encoding="utf-8", errors="replace").split('\n')[0]
+                    name_m = re.match(r'\s*Shader\s+"([^"]+)"', first_line)
+                    if name_m:
+                        name_to_guid[name_m.group(1).lower()] = g
+                except Exception:
+                    pass
+
+    if log_cb:
+        log_cb(f"  Found {len(project_shaders)} shader(s) in project")
+        log_cb(f"  Known shader names: {list(name_to_guid.keys())[:6]}")
+
+    mat_files = list(assets.rglob("*.mat"))
+    if log_cb: log_cb(f"  Checking {len(mat_files)} material(s)...")
+
+    fixed = 0; skipped = 0; errors = []
+
+    for mat_path in mat_files:
+        try:
+            src = mat_path.read_text(encoding="utf-8", errors="replace")
+            shader_m = re.search(r'm_Shader:\s*\{fileID:\s*(\d+),\s*guid:\s*([0-9a-f]{32}),\s*type:\s*(\d+)\}', src)
+            if not shader_m:
+                skipped += 1
+                continue
+
+            cur_file_id, cur_guid, cur_type = shader_m.group(1), shader_m.group(2), shader_m.group(3)
+
+            if cur_guid in project_shaders:
+                skipped += 1
+                continue
+
+            if cur_guid == "0000000000000000f000000000000000":
+                skipped += 1
+                continue
+
+            new_file_id = new_guid = new_type = None
+
+            mat_name_m = re.search(r'm_Name:\s*(.+)', src)
+            mat_name = mat_name_m.group(1).strip().lower() if mat_name_m else ""
+
+            for shader_name_lower, guid in name_to_guid.items():
+                if shader_name_lower in mat_name or mat_name in shader_name_lower:
+                    new_file_id, new_guid, new_type = "4800000", guid, "3"
+                    if log_cb: log_cb(f"  ✓  {mat_path.name}  →  matched project shader '{shader_name_lower}'")
+                    break
+
+            if not new_guid:
+                for shader_name_lower, guid in name_to_guid.items():
+                    if any(kw in src for kw in ("_Color", "_MainTex", "_Glossiness", "_Metallic")):
+                        if "standard" in shader_name_lower:
+                            new_file_id, new_guid, new_type = "4800000", guid, "3"
+                            if log_cb: log_cb(f"  ✓  {mat_path.name}  →  matched Standard-like shader in project")
+                            break
+
+            if not new_guid:
+                mat_props = set(re.findall(r'- (\w+):', src))
+                best_name = None; best_score = 0
+                for sname_lower, guid in name_to_guid.items():
+                    shader_file = project_shaders[guid]
+                    try:
+                        scontent = shader_file.read_text(encoding="utf-8", errors="replace")
+                        shader_props = set(re.findall(r'(\w+)\s*\(', scontent))
+                        score = len(mat_props & shader_props)
+                        if score > best_score:
+                            best_score = score; best_name = sname_lower; new_file_id, new_guid, new_type = "4800000", guid, "3"
+                    except Exception:
+                        pass
+                if new_guid and log_cb:
+                    log_cb(f"  ✓  {mat_path.name}  →  best-match shader '{best_name}' ({best_score} props)")
+
+            if not new_guid:
+                if log_cb: log_cb(f"  ⬡  {mat_path.name}  →  no project shader found, using built-in Standard")
+                fid, g, tp = _BUILTIN_SHADER_REMAP["standard"]
+                new_file_id, new_guid, new_type = str(fid), g, str(tp)
+
+            patched_src = re.sub(
+                r'm_Shader:\s*\{fileID:\s*\d+,\s*guid:\s*[0-9a-f]{32},\s*type:\s*\d+\}',
+                f'm_Shader: {{fileID: {new_file_id}, guid: {new_guid}, type: {new_type}}}',
+                src, count=1)
+            mat_path.write_text(patched_src, encoding="utf-8")
+            fixed += 1
+
+        except Exception as e:
+            errors.append(f"{mat_path.name}: {e}")
+            if log_cb: log_cb(f"  ERROR {mat_path.name}: {e}")
+
+    if log_cb:
+        log_cb(f"\n  ── Shader Fix Summary ──")
+        log_cb(f"  Fixed {fixed} material(s), skipped {skipped} (already valid)")
+        if errors: log_cb(f"  {len(errors)} error(s)")
+    return fixed, skipped, errors
+
+
 _TMP_SIGNATURES = [
     ("TextMeshPro",     ["m_text:",    "m_fontAsset:",  "m_sharedMaterial:",
                          "m_isOrthographic:"]),
@@ -486,15 +568,13 @@ _TMP_SIGNATURES = [
                          "m_isOrthographic:"]),
     ("TMP_SubMeshUI",   ["m_TextComponent:", "m_sharedMaterial:", "m_fontAsset:",
                          "m_raycastTarget:"]),
-    # Font/Sprite assets live in .asset files, not scene/prefab objects
     ("TMP_FontAsset",   ["m_AtlasTextures:", "m_AtlasWidth:", "m_GlyphTable:",
                          "m_CharacterTable:"]),
     ("TMP_SpriteAsset", ["m_SpriteCharacterTable:", "m_SpriteGlyphTable:",
                          "m_spriteSheet:"]),
-    ("TMP_Text",        ["m_text:", "m_fontAsset:"]),   # base class catch-all
+    ("TMP_Text",        ["m_text:", "m_fontAsset:"]),
 ]
 
-# Well-known TMP script GUIDs from the official TMP package (across versions)
 _TMP_GUIDS = {
     "9541d86e2fd84c1d9990d2468cda992d": "TextMeshPro",
     "f4db1ef99e1c24d6bd28b3f9f9f2ebc5": "TextMeshProUGUI",
@@ -507,15 +587,12 @@ _TMP_GUIDS = {
 }
 
 def _classify_monobehaviour(block: str):
-    """Return the TMP component type name if the block matches, else None."""
-    # 1. Check script GUID first — most reliable
     guid_m = re.search(r'm_Script:.*?guid:\s*([0-9a-f]{32})', block)
     if guid_m:
         g = guid_m.group(1).lower()
         if g in _TMP_GUIDS:
             return _TMP_GUIDS[g]
 
-    # 2. Field-signature matching — catches UAR exports where GUID was randomised
     best_type = None; best_score = 0
     for comp_type, sigs in _TMP_SIGNATURES:
         score = sum(1 for s in sigs if s in block)
@@ -525,13 +602,8 @@ def _classify_monobehaviour(block: str):
 
     return best_type
 
-
 def scan_tmp_components(project_path: Path, log_cb=None):
-    """
-    Scan .unity, .prefab, and .asset files for any GameObjects / assets
-    that contain TMP components. Returns a list of result dicts.
-    """
-    results = []   # list of {file, go_name, component, line}
+    results = []
     errors  = []
     total_files = 0
 
@@ -549,10 +621,8 @@ def scan_tmp_components(project_path: Path, log_cb=None):
         try:
             src = f.read_text(encoding="utf-8", errors="replace")
 
-            # Split into YAML document blocks separated by "--- "
             blocks = re.split(r'\n---\s+', src)
 
-            # Build a map of fileID → m_Name for GameObjects in this file
             go_names: dict[str, str] = {}
             for block in blocks:
                 if "m_Name:" in block and "GameObject:" in block:
@@ -561,7 +631,6 @@ def scan_tmp_components(project_path: Path, log_cb=None):
                     if fid_m and name_m:
                         go_names[fid_m.group(1)] = name_m.group(1).strip()
 
-            # Check each MonoBehaviour block
             for block in blocks:
                 if "MonoBehaviour:" not in block:
                     continue
@@ -569,13 +638,11 @@ def scan_tmp_components(project_path: Path, log_cb=None):
                 if not comp_type:
                     continue
 
-                # Find which GameObject owns this component
                 go_ref_m = re.search(r'm_GameObject:\s*\{fileID:\s*(\d+)', block)
                 go_name = "?"
                 if go_ref_m:
                     go_name = go_names.get(go_ref_m.group(1), f"fileID:{go_ref_m.group(1)}")
 
-                # Approximate line number
                 char_pos = src.find(block[:60]) if len(block) > 60 else 0
                 line_no  = src[:char_pos].count("\n") + 1 if char_pos > 0 else 0
 
@@ -593,7 +660,6 @@ def scan_tmp_components(project_path: Path, log_cb=None):
             errors.append(f"{f.name}: {e}")
             if log_cb: log_cb(f"  ERROR {f.name}: {e}")
 
-    # Summary by type
     if log_cb:
         from collections import Counter
         counts = Counter(r["component"] for r in results)
@@ -604,17 +670,12 @@ def scan_tmp_components(project_path: Path, log_cb=None):
 
     return results, errors
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  WIDGETS
-# ══════════════════════════════════════════════════════════════════════════════
-
 class RoundRect:
     @staticmethod
     def draw(canvas, x1,y1,x2,y2,r=8,**kw):
         pts=[x1+r,y1,x2-r,y1,x2,y1,x2,y1+r,x2,y2-r,x2,y2,x2-r,y2,
              x1+r,y2,x1,y2,x1,y2-r,x1,y1+r,x1,y1,x1+r,y1]
         return canvas.create_polygon(pts,smooth=True,**kw)
-
 
 class GlowButton(tk.Canvas):
     def __init__(self,parent,text,command,width=160,height=38,**kw):
@@ -650,7 +711,6 @@ class GlowButton(tk.Canvas):
 
     def set_text(self,t): self._text=t; self._draw()
 
-
 class OutlineButton(tk.Canvas):
     def __init__(self,parent,text,command,width=130,height=32,**kw):
         bg_c=kw.pop("bg",CARD)
@@ -674,7 +734,6 @@ class OutlineButton(tk.Canvas):
         self.create_text(w//2,h//2,text=self._text,
                          fill=TEXT if self._hover else TEXT_MID,
                          font=(FF_BODY(),fs(9)))
-
 
 class ToggleSwitch(tk.Canvas):
     def __init__(self,parent,value=True,on_change=None,**kw):
@@ -702,7 +761,6 @@ class ToggleSwitch(tk.Canvas):
     @property
     def value(self): return self._val
     def set(self,v): self._val=v; self._draw()
-
 
 class SliderWidget(tk.Canvas):
     def __init__(self,parent,min_val,max_val,value,on_change=None,
@@ -749,7 +807,6 @@ class SliderWidget(tk.Canvas):
     def value(self): return self._val
     def set(self,v): self._val=v; self._draw()
 
-
 class ProgressBar(tk.Canvas):
     def __init__(self,parent,width=400,**kw):
         super().__init__(parent,width=width,height=6,highlightthickness=0,**kw)
@@ -765,7 +822,6 @@ class ProgressBar(tk.Canvas):
 
     def set(self,pct):
         self._pct=max(0,min(1,pct)); self._draw()
-
 
 class LogBox(tk.Frame):
     def __init__(self,parent,height=120,**kw):
@@ -790,11 +846,6 @@ class LogBox(tk.Frame):
         self._txt.configure(state="normal")
         self._txt.delete("1.0","end")
         self._txt.configure(state="disabled")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  TOAST
-# ══════════════════════════════════════════════════════════════════════════════
 
 class Toast:
     W,H=320,72; PAD=18; SPEED=14
@@ -878,11 +929,6 @@ class Toast:
             except Exception: pass
             self._win=None
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  OVERLAYS
-# ══════════════════════════════════════════════════════════════════════════════
-
 class TutorialOverlay(tk.Frame):
     def __init__(self,parent,on_close):
         super().__init__(parent,bg="#0d1520")
@@ -931,7 +977,6 @@ class TutorialOverlay(tk.Frame):
         self.destroy()
         if self._on_close: self._on_close()
 
-
 class ProjectPicker(tk.Frame):
     def __init__(self,parent,projects,on_pick,on_cancel):
         super().__init__(parent,bg="#080e18")
@@ -966,11 +1011,6 @@ class ProjectPicker(tk.Frame):
         OutlineButton(br,"Browse...",_browse,width=100,height=28,bg=CARD).pack(side="right")
         ft=tk.Frame(card,bg=CARD); ft.pack(fill="x",padx=20,pady=(8,18))
         OutlineButton(ft,"Cancel",lambda:(self.destroy(),on_cancel()),width=80,height=30,bg=CARD).pack(side="right")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  SIDEBAR
-# ══════════════════════════════════════════════════════════════════════════════
 
 class Sidebar(tk.Canvas):
     ITEM_H=46; W=210
@@ -1038,11 +1078,6 @@ class Sidebar(tk.Canvas):
 
     def set_active(self,key): self._active=key; self._draw_items()
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  FIX CARD  (reusable with progress + log)
-# ══════════════════════════════════════════════════════════════════════════════
-
 class FixCard(tk.Frame):
     def __init__(self,parent,icon,title,subtitle,btn_label,on_execute,**kw):
         super().__init__(parent,bg=CARD,highlightthickness=1,
@@ -1102,19 +1137,16 @@ class FixCard(tk.Frame):
             self._log.append(f"\n{'✓' if success else '✕'} {summary}"),
         ))
 
-    def set_target(self,s): pass   # target box removed, kept for API compat
+    def set_target(self,s): pass
     def set_btn_text(self,t): self._btn.set_text(t)
 
-
 class TMPFixCard(FixCard):
-    """Single Execute button: injects shader, then scans for TMP objects."""
     def __init__(self,parent,icon,title,subtitle,btn_label,on_execute,
                  on_scan=None,**kw):
         super().__init__(parent,icon,title,subtitle,btn_label,on_execute,**kw)
         self._on_scan=on_scan
 
     def _done(self,success,summary):
-        # After shader inject, immediately kick off the scan
         self._log_line(f"\n{'✓' if success else '✕'} {summary}")
         self._progress.set(0.5)
         if success and self._on_scan:
@@ -1136,11 +1168,6 @@ class TMPFixCard(FixCard):
                 fg=SUCCESS if success else ERROR_C),
             self._log.append(f"\n{'✓' if success else '✕'} {summary}"),
         ))
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  UNITY FIXES PANEL
-# ══════════════════════════════════════════════════════════════════════════════
 
 class UnityFixesPanel(tk.Frame):
     def __init__(self,parent,toast,**kw):
@@ -1177,6 +1204,9 @@ class UnityFixesPanel(tk.Frame):
             ("shader",   "◈","TMP Shader Fix",
              "Injects WASM/Wasmcomfix shader, then scans for TMP objects",
              "⚡  Execute", self._exec_shader),
+            ("broken_shaders", "◉", "Broken Shader Auto-Fix",
+             "Remaps pink/missing shaders in .mat files to matching project or built-in shaders",
+             "⚡  Execute", self._exec_broken_shaders),
             ("guid",     "⬡","Script GUID Stability",
              "Deterministic .meta GUIDs from assembly+class name",
              "⚡  Execute", self._exec_guid),
@@ -1222,16 +1252,10 @@ class UnityFixesPanel(tk.Frame):
         threading.Thread(target=worker,daemon=True).start()
 
     def _exec_tmp_scan(self,log,done):
-        """Called automatically after shader inject.
-        Applies WASM/Wasmcomfix + all attributes to every TMP .mat, then
-        scans scene/prefab files so the user can see which objects still need
-        their material reassigned inside Unity."""
         if not self._require_project(): return
         def _w():
-            # Step 1: patch .mat files
             log("  -- Step 1: Applying WASM/Wasmcomfix to TMP materials --")
             patched, mat_errors = apply_wasm_shader_to_tmp_materials(self._project, log)
-            # Step 2: component scan
             log("\n  -- Step 2: Scanning for TMP GameObjects --")
             log("  Detecting: TextMeshPro  TextMeshProUGUI  TMP_Text")
             log("             TMP_InputField  TMP_Dropdown  TMP_FontAsset")
@@ -1242,6 +1266,21 @@ class UnityFixesPanel(tk.Frame):
                        f"Found {len(results)} TMP object(s)")
             if all_errors: summary += f"  ·  {len(all_errors)} error(s)"
             done(True, summary)
+        threading.Thread(target=_w, daemon=True).start()
+
+    def _exec_broken_shaders(self, log, done):
+        if not self._require_project(): return
+        def _w():
+            log("  Scanning for broken / pink-shader materials...")
+            log("  Step 1: Indexing .shader files in project...")
+            log("  Step 2: Checking .mat shader GUIDs against project index...")
+            log("  Step 3: Remapping broken refs (project match → built-in fallback)...")
+            fixed, skipped, errors = fix_broken_shaders(self._project, log)
+            summary = f"Fixed {fixed} material(s)  ·  {skipped} already OK"
+            if errors: summary += f"  ·  {len(errors)} error(s)"
+            if fixed > 0:
+                log("\n  Reimport Assets in Unity to apply shader changes.")
+            done(fixed > 0 or not errors, summary)
         threading.Thread(target=_w, daemon=True).start()
 
     def _exec_shader(self,log,done):
@@ -1272,10 +1311,6 @@ class UnityFixesPanel(tk.Frame):
         self._make_exec(fix_script_guids,
             lambda r:f"Updated {r[0]} GUIDs, skipped {r[1]}, {len(r[2])} error(s)")(log,done)
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SETTINGS PANEL
-# ══════════════════════════════════════════════════════════════════════════════
-
 class SettingsPanel(tk.Frame):
     def __init__(self,parent,rebuild_cb,**kw):
         super().__init__(parent,bg=CONTENT,**kw)
@@ -1303,7 +1338,6 @@ class SettingsPanel(tk.Frame):
         self._build_behaviour()
         self._build_project()
 
-    # ── section helpers ──────────────────────────────────────────────────────
     def _section(self,label):
         f=tk.Frame(self._sf,bg=CONTENT); f.pack(fill="x",pady=(dp(20),dp(10)))
         tk.Canvas(f,width=3,height=14,bg=ACCENT,highlightthickness=0).pack(side="left",anchor="center")
@@ -1326,11 +1360,9 @@ class SettingsPanel(tk.Frame):
     def _divider(self,card):
         tk.Frame(card,bg=BORDER,height=1).pack(fill="x",padx=dp(20))
 
-    # ── Appearance ───────────────────────────────────────────────────────────
     def _build_appearance(self):
         self._section("APPEARANCE")
 
-        # Theme swatches
         tc=self._card()
         tk.Label(tc,text="Color Theme",fg=TEXT,bg=CARD,font=(FF_BODY(),fs(9),"bold"),
                  padx=dp(20),pady=dp(10)).pack(anchor="w")
@@ -1350,7 +1382,6 @@ class SettingsPanel(tk.Frame):
 
         self._divider(tc)
 
-        # Accent color
         ac=self._row(tc,"Accent Color","Override the theme's accent color")
         self._accent_preview=tk.Canvas(ac,width=48,height=28,highlightthickness=1,
                                        highlightbackground=BORDER,cursor="hand2")
@@ -1364,7 +1395,6 @@ class SettingsPanel(tk.Frame):
 
         self._divider(tc)
 
-        # Font size
         fs_ctrl=self._row(tc,"Font Size",f"Currently: {SETTINGS.get('font_size',9)}pt")
         self._fs_lbl=fs_ctrl.winfo_children()[-1] if fs_ctrl.winfo_children() else None
         self._fs_slider=SliderWidget(fs_ctrl,8,16,SETTINGS.get("font_size",9),
@@ -1373,7 +1403,6 @@ class SettingsPanel(tk.Frame):
 
         self._divider(tc)
 
-        # UI density
         dn=self._row(tc,"UI Density","Controls spacing and padding throughout the app")
         for opt in ("Compact","Normal","Comfortable"):
             sel=SETTINGS.get("ui_density","Normal")==opt
@@ -1391,7 +1420,6 @@ class SettingsPanel(tk.Frame):
 
         self._divider(tc)
 
-        # Card style
         cs=self._row(tc,"Card Style","Visual style of fix cards")
         for opt in ("Default","Minimal","Outlined"):
             sel=SETTINGS.get("card_style","Default")==opt
@@ -1408,7 +1436,6 @@ class SettingsPanel(tk.Frame):
 
         self._divider(tc)
 
-        # Custom fonts
         font_card=self._card()
         tk.Label(font_card,text="Custom Fonts",fg=TEXT,bg=CARD,font=(FF_BODY(),fs(9),"bold"),
                  padx=dp(20),pady=dp(10)).pack(anchor="w")
@@ -1454,12 +1481,10 @@ class SettingsPanel(tk.Frame):
     def _on_font_size(self,v):
         SETTINGS["font_size"]=int(v); save_settings(SETTINGS)
 
-    # ── Behaviour ────────────────────────────────────────────────────────────
     def _build_behaviour(self):
         self._section("BEHAVIOUR")
         bc=self._card()
 
-        # Animations toggle
         ar=self._row(bc,"Animations","Enable toast slide + fade animations")
         at=ToggleSwitch(ar,SETTINGS.get("animations",True),bg=CARD,
                         on_change=lambda v:(SETTINGS.update({"animations":v}),save_settings(SETTINGS)))
@@ -1467,7 +1492,6 @@ class SettingsPanel(tk.Frame):
 
         self._divider(bc)
 
-        # Toast duration
         td_row=self._row(bc,"Toast Duration","How long notifications stay visible")
         self._td_slider=SliderWidget(td_row,1000,8000,
                                      SETTINGS.get("toast_duration",3500),
@@ -1477,7 +1501,6 @@ class SettingsPanel(tk.Frame):
 
         self._divider(bc)
 
-        # Toast position
         tp=self._row(bc,"Toast Position","Where notifications appear")
         for pos in ("Bottom Right","Bottom Left","Top Right","Top Left"):
             sel=SETTINGS.get("toast_pos","Bottom Right")==pos
@@ -1493,7 +1516,6 @@ class SettingsPanel(tk.Frame):
 
         self._divider(bc)
 
-        # Compact cards
         cc_row=self._row(bc,"Compact Cards","Reduce padding inside fix cards")
         ct=ToggleSwitch(cc_row,SETTINGS.get("compact_cards",False),bg=CARD,
                         on_change=lambda v:(SETTINGS.update({"compact_cards":v}),save_settings(SETTINGS),self._rebuild()))
@@ -1501,13 +1523,11 @@ class SettingsPanel(tk.Frame):
 
         self._divider(bc)
 
-        # Tooltips
         tt_row=self._row(bc,"Tooltips","Show helpful tooltips on hover")
         tt=ToggleSwitch(tt_row,SETTINGS.get("show_tooltips",True),bg=CARD,
                         on_change=lambda v:(SETTINGS.update({"show_tooltips":v}),save_settings(SETTINGS)))
         tt.pack()
 
-    # ── Project ──────────────────────────────────────────────────────────────
     def _build_project(self):
         self._section("PROJECT DETECTION")
         pc=self._card()
@@ -1534,16 +1554,10 @@ class SettingsPanel(tk.Frame):
         OutlineButton(lp_row,"Clear",lambda:(SETTINGS.update({"last_project":""}),save_settings(SETTINGS),self._rebuild()),
                       width=60,height=24,bg=CARD).pack(side="left")
 
-    # ── Reset defaults ───────────────────────────────────────────────────────
     def _reset_defaults(self):
         SETTINGS.clear(); SETTINGS.update(DEFAULT_SETTINGS)
         apply_theme(); save_settings(SETTINGS)
         self._rebuild()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ABOUT PANEL
-# ══════════════════════════════════════════════════════════════════════════════
 
 class AboutPanel(tk.Frame):
     def __init__(self,parent,**kw):
@@ -1597,6 +1611,11 @@ class AboutPanel(tk.Frame):
              "Injects a full TMP-compatible SDF shader with all required ShaderUtilities properties "
              "(_WeightNormal, _WeightBold, _FaceDilate, _ScaleRatioA/B/C) and a no-op Pass 1 for "
              "Graphics.Blit(mat, pass:1) masking calls. Fixes red boxes and TMP material crash."),
+            ("Broken Shader Auto-Fix","Shader · Material · Pink · Missing","ACTIVE",SUCCESS,
+             "Scans all .mat files in Assets for broken shader references (pink/magenta objects). "
+             "Indexes every .shader file in the project and remaps materials by property-signature "
+             "matching. Falls back to built-in Standard if no project shader matches. Run this then "
+             "reimport Assets in Unity — no more pink meshes from UAR exports."),
             ("Script GUID Stability","GUID · MonoScript · Prefab · Meta","ACTIVE",SUCCESS,
              "Derives script asset GUIDs deterministically from MD5(namespace+classname), matching Unity's "
              "own algorithm. All m_Script references in Prefabs/Scenes resolve across re-exports."),
@@ -1617,11 +1636,6 @@ class AboutPanel(tk.Frame):
             tk.Frame(c,bg=BORDER,height=1).pack(fill="x",padx=dp(18),pady=(dp(8),0))
             tk.Label(c,text=desc,fg=TEXT_MID,bg=CARD,font=(FF_BODY(),fs(8)),
                      wraplength=660,justify="left",anchor="w").pack(fill="x",padx=dp(18),pady=(dp(8),dp(12)))
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  MAIN APPLICATION
-# ══════════════════════════════════════════════════════════════════════════════
 
 NAV_ITEMS=[
     ("unity_fixes","⬡","Unity Fixes"),
@@ -1692,7 +1706,6 @@ class App(tk.Tk):
         self._panels[self._active_key].pack_forget()
         self._active_key=key
         self._panels[key].pack(fill="both",expand=True)
-
 
 if __name__=="__main__":
     App().mainloop()
