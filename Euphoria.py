@@ -134,8 +134,8 @@ def dp(v):
     m={"Compact":0.6,"Normal":1.0,"Comfortable":1.45}
     return max(1, int(v * m.get(SETTINGS.get("ui_density","Normal"),1.0)))
 
-SHADER_NAME = "NPA_Text_Fix.shader"
-SHADER_DIR  = "NPA"   # sub-folder under Assets/Shaders/
+SHADER_NAME = "Wasmcomfix.shader"
+SHADER_DIR  = "WASMCOM"   # sub-folder under Assets/Shaders/
 SHADER_CONTENT = r'''Shader "WASMCOM/WASMCOMFIX"
 {
     Properties
