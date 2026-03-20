@@ -135,7 +135,7 @@ def dp(v):
     return max(1, int(v * m.get(SETTINGS.get("ui_density","Normal"),1.0)))
 
 SHADER_NAME = "Wasmcomfix.shader"
-SHADER_DIR  = "WASMCOM"   # sub-folder under Assets/Shaders/
+SHADER_DIR  = "WASMCOM"  
 SHADER_CONTENT = r'''Shader "WASMCOM/WASMCOMFIX"
 {
     Properties
@@ -365,11 +365,7 @@ def fix_script_guids(project_path: Path, log_cb=None):
             if log_cb: log_cb(f"  ERROR {cs.name}: {e}")
     return fixed, skipped, errors
 
-# ── Unity Reference Fixer ─────────────────────────────────────────────────────
-# Scans .prefab / .unity / .asset files for MonoBehaviour blocks whose
-# m_Script GUID is missing (all-zeros or fileID:0) and attempts to
-# re-link them by matching serialised field names against every .cs script
-# in the project.
+
 
 def _build_script_index(project_path: Path, log_cb=None):
     """
@@ -394,14 +390,14 @@ def _build_script_index(project_path: Path, log_cb=None):
         except Exception:
             continue
 
-        # extract class name
+ 
         cl_m = re.search(r'(?:class|struct)\s+(\w+)', src)
         class_name = cl_m.group(1) if cl_m else cs_path.stem
 
-        # extract serialised field names (public or [SerializeField])
+
         fields: set[str] = set()
         for ln in src.splitlines():
-            # public Type fieldName  or  [SerializeField] ... Type fieldName
+         
             fm = re.search(r'(?:public|protected|private)\s+\S+\s+(\w+)\s*[;=\[]', ln)
             if fm:
                 fields.add(fm.group(1))
@@ -448,7 +444,7 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
 
     fixed = 0; skipped = 0; errors = []
 
-    # pre-compile per-script field matchers once
+
     script_field_sets = {g: info["fields"] for g, info in guid_map.items()}
 
     for f in files:
@@ -457,15 +453,15 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
             out  = src
             hits = 0
 
-            # split into YAML documents (--- blocks)
+ 
             raw_blocks = re.split(r'(\n---\s+)', src)
 
             for block in raw_blocks:
                 if "MonoBehaviour:" not in block:
                     continue
 
-                # check if m_Script is already valid (non-zero guid pointing at
-                # a known project script)
+             
+     
                 existing = re.search(
                     r'm_Script:\s*\{fileID:\s*\d+,\s*guid:\s*([0-9a-f]{32}),\s*type:\s*\d+\}',
                     block)
@@ -474,14 +470,13 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
                     if eg != "0" * 32 and eg in guid_map:
                         skipped += 1
                         continue
-                    # GUID exists but points nowhere in our index — treat as missing
+                 
                     if eg not in guid_map and eg != "0" * 32:
-                        # unknown external package ref; skip it
+                 
                         skipped += 1
                         continue
 
-                # --- missing reference path ---
-                # extract YAML field keys from this block
+
                 block_keys: set[str] = set(re.findall(r'^\s{2,}(\w+):', block, re.MULTILINE))
 
                 best_guid  = None
@@ -489,10 +484,10 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
 
                 for g, info in guid_map.items():
                     score = 0
-                    # class-name hint in the block
+        
                     if info["class"].lower() in block.lower():
                         score += 5
-                    # field overlap
+            
                     overlap = len(block_keys & info["fields"])
                     score  += overlap
 
@@ -509,7 +504,7 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
                 info = guid_map[best_guid]
                 new_ref = f'm_Script: {{fileID: 11500000, guid: {best_guid}, type: 3}}'
 
-                # replace only the broken m_Script line in this block
+           
                 patched_block = re.sub(
                     r'm_Script:\s*\{[^}]*\}',
                     new_ref,
