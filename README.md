@@ -3,6 +3,7 @@
 # Euphoria — UAR Gap Filler
 
 **v2.1** · Python 3.9+ · tkinter (stdlib only)  
+**dll**  · Python 3.9+ (64-bit) · ctypes (stdlib only) · Visual Studio 2019/2022 w/ Build Tools and Desktop development with C++ workload · Windows SDK 10.0+ · C++ 17 or later · httpapi.dll · ws2_32.dll · ole32.dll · shell32.dll · shlwapi.dll · advapi32.dll
 *@dudeluther1232 · @shxyder*
 
 -----
@@ -13,19 +14,51 @@ Euphoria fixes the common breakages that [UnityAssetRipper](https://github.com/A
 
 ## Requirements
 
+### Python Release
 - Python 3.9 or newer
 - tkinter (included with standard Python on Windows and macOS; on Linux: `sudo apt install python3-tk`)
 - No third-party packages
 
+### Build from C++ to dll
+- Python 3.9 or newer
+- ctypes (included with stlib)
+- Visual Studio 2019/2022 w/ Build Tools and Desktop development with C++ workload
+- Windows SDK 10.0+
+- C++ 17 or later
+(The following are all Windows built-ins)
+- httpapi.dll
+- ws2_32.dll
+- ole32.dll
+- shell32.dll
+- shlwapi.dll
+- advapi32.dll
 -----
 
-## Running
+## Running Python Release
 
 ```bash
 python Euphoria.py
 ```
 
-The window opens centred on screen. Select your Unity project either from the auto-detected list or by browsing manually.
+The window opens centered on the screen. Select your Unity project either from the auto-detected list or by browsing manually.
+
+## Running C++ to dll
+
+Download euphoriaServer.cpp and open x64 Native Tools Command Prompt for VS. Then run
+
+```bash
+cl /LD /EHsc /std:c++17 EuphoriaServer.cpp /link /OUT:EuphoriaServer.dll
+```
+
+After building from source, run
+
+```python
+import ctypes
+dll = ctypes.WinDLL(r"euphoriaServer.dll")
+dll.EuphoriaStart()
+input("press enter to stop...")
+dll.EuphoriaStop()
+```
 
 -----
 
@@ -33,7 +66,7 @@ The window opens centred on screen. Select your Unity project either from the au
 
 ### TMP Shader Fix
 
-Injects `Wasmcomfix.shader` into `Assets/Shaders/WASMCOM/` and rewrites every TextMeshPro material in the project to reference it. Fixes the red/black boxes that appear when TMP can’t locate its SDF shader after a rip. After running, also scans every `.unity`, `.prefab`, and `.asset` file and reports all TMP component instances found (TextMeshPro, TextMeshProUGUI, TMP_InputField, TMP_Dropdown, TMP_SubMesh, TMP_SubMeshUI, TMP_FontAsset, TMP_SpriteAsset).
+Injects `Wasmcomfix.shader` into `Assets/Shaders/WASMCOM/` and rewrites every TextMeshPro material in the project to reference it. Fixes the red/black boxes that appear when TMP can’t locate its SDF shader after a rip. After running, it also scans every `.unity`, `.prefab`, and `.asset` file and reports all TMP component instances found (TextMeshPro, TextMeshProUGUI, TMP_InputField, TMP_Dropdown, TMP_SubMesh, TMP_SubMeshUI, TMP_FontAsset, TMP_SpriteAsset).
 
 A step-by-step tutorial overlay appears after injection to guide you through applying the shader inside Unity.
 
@@ -49,11 +82,11 @@ Falls back to the built-in Unity Standard shader if no project shader matches. R
 
 ### Script GUID Stability
 
-Unity identifies scripts by a GUID stored in their `.meta` file. After a rip these are often random or missing, which breaks every `m_Script` reference in scenes and prefabs. This fix derives GUIDs deterministically from `MD5(namespace + classname)`, matching Unity’s own algorithm, so GUIDs stay stable across re-exports. Creates `.meta` files for any `.cs` files that are missing one.
+Unity identifies scripts by a GUID stored in their `.meta` file. After a rip, these are often random or missing, which breaks every `m_Script` reference in scenes and prefabs. This fix derives GUIDs deterministically from `MD5(namespace + classname)`, matching Unity’s own algorithm, so GUIDs stay stable across re-exports. Creates `.meta` files for any `.cs` files that are missing one.
 
 ### Missing Reference Fixer
 
-Scans every `.unity`, `.prefab`, and `.asset` file for `MonoBehaviour` components whose `m_Script` GUID is all-zeros (the “Missing Script” error in the Unity Inspector). For each broken component it builds a score against every `.cs` script in the project:
+Scans every `.unity`, `.prefab`, and `.asset` file for `MonoBehaviour` components whose `m_Script` GUID is all-zeros (the “Missing Script” error in the Unity Inspector). For each broken component, it builds a score against every `.cs` script in the project:
 
 - **+5** if the class name appears in the YAML block
 - **+n** for each serialised field name that overlaps between the block and the script
@@ -75,10 +108,10 @@ The undo/redo stacks persist for the lifetime of the session. Running a new fix 
 
 ## Diff Viewer
 
-Each fix card has a **▸ log / diff** toggle. Expanding it shows:
+Each fix card has a **▸ log/diff** toggle. Expanding it shows:
 
 - A live scrolling log of what the fix is doing
-- A unified diff viewer that populates when the fix completes, with green highlighted additions and red highlighted removals
+- A unified diff viewer that populates when the fix completes, with green-highlighted additions and red-highlighted removals
 - A file dropdown when multiple files were changed, letting you inspect each one individually
 - A `+N -N` line-change summary
 
@@ -107,7 +140,7 @@ Settings are saved to `~/.unity_tools_v2.json` and persist across sessions.
 
 ## Project Detection
 
-On startup (if Auto-Detect is enabled) Euphoria scans:
+On startup (if Auto-Detect is enabled), Euphoria scans:
 
 - `~/Documents/Unity`
 - `~/Unity`
@@ -127,4 +160,4 @@ Up to 25 projects are shown in the picker. You can also browse manually to any f
 - After any fix that touches `.mat` or scene/prefab files, Unity needs to reimport the changed assets before the fix takes effect in the editor.
 
 
-# THIS IS A IN DEV, EVERYTHING HERE WILL MOST LIKELY CHANGE
+# THIS IS IN DEV, EVERYTHING HERE WILL MOST LIKELY CHANGE
