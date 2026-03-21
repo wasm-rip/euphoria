@@ -49,7 +49,7 @@ The window opens centered on the screen. Select your Unity project either from t
 Download euphoriaServer.cpp and open x64 Native Tools Command Prompt for VS. Then run
 
 ```bash
-cl /LD /EHsc /std:c++17 EuphoriaServer.cpp /link /OUT:EuphoriaServer.dll
+cl /LD /EHsc /std:c++17 euphoriaServer.cpp /link /OUT:euphoriaServer.dll
 ```
 
 After building from source, run
