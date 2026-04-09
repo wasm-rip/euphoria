@@ -453,15 +453,15 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
             out  = src
             hits = 0
 
- 
+
             raw_blocks = re.split(r'(\n---\s+)', src)
 
             for block in raw_blocks:
                 if "MonoBehaviour:" not in block:
                     continue
 
-             
-     
+
+
                 existing = re.search(
                     r'm_Script:\s*\{fileID:\s*\d+,\s*guid:\s*([0-9a-f]{32}),\s*type:\s*\d+\}',
                     block)
@@ -470,9 +470,9 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
                     if eg != "0" * 32 and eg in guid_map:
                         skipped += 1
                         continue
-                 
+
                     if eg not in guid_map and eg != "0" * 32:
-                 
+
                         skipped += 1
                         continue
 
@@ -484,10 +484,10 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
 
                 for g, info in guid_map.items():
                     score = 0
-        
+
                     if info["class"].lower() in block.lower():
                         score += 5
-            
+
                     overlap = len(block_keys & info["fields"])
                     score  += overlap
 
@@ -504,7 +504,7 @@ def fix_missing_script_refs(project_path: Path, log_cb=None):
                 info = guid_map[best_guid]
                 new_ref = f'm_Script: {{fileID: 11500000, guid: {best_guid}, type: 3}}'
 
-           
+
                 patched_block = re.sub(
                     r'm_Script:\s*\{[^}]*\}',
                     new_ref,
@@ -975,6 +975,8 @@ class Toast:
         self._win.geometry(f"{tw}x{th}+{tx}+{sy}")
         self._cur_y=float(sy); self._tgt_y=float(ty); self._tx=tx
         self._alpha=0.0
+        # Return focus to the main window so the toast doesn't steal it
+        self._root.after(10, self._root.focus_force)
         if SETTINGS.get("animations",True): self._slide_in()
         else:
             self._alpha=1.0
@@ -1019,6 +1021,8 @@ class Toast:
             try: self._win.destroy()
             except Exception: pass
             self._win=None
+        try: self._root.focus_force()
+        except Exception: pass
 
 class TutorialOverlay(tk.Frame):
     def __init__(self,parent,on_close):
@@ -1215,6 +1219,7 @@ class FixCard(tk.Frame):
         self._on_execute(self._log_line, self._done)
 
     def _log_line(self,msg):
+        print(msg, flush=True)
         self.after(0,lambda:self._log.append(msg))
 
     def _done(self,success,summary):
